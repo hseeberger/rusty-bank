@@ -1,0 +1,40 @@
+[package]
+name          = "rusty-bank"
+version       = "0.1.0"
+edition       = "2021"
+description   = "Simplistic banking demo built with EventSourced"
+authors       = [ "Heiko Seeberger <git@heikoseeberger.de>" ]
+license-file  = "LICENSE"
+readme        = "README.md"
+homepage      = "https://github.com/hseeberger/rusty-bank"
+repository    = "https://github.com/hseeberger/rusty-bank"
+documentation = "https://github.com/hseeberger/rusty-bank"
+
+[dependencies]
+anyhow                = { version = "1.0" }
+axum                  = { version = "0.6", features = [ "headers", "http2", "json", "macros" ] }
+bb8-postgres          = { version = "0.8" }
+configured            = { version = "0.5" }
+eventsourced          = { version = "0.5", default-features = false, features = [ "serde_json" ] }
+eventsourced-nats     = { version = "0.5", optional = true }
+eventsourced-postgres = { version = "0.5", optional = true }
+futures               = { version = "0.3" }
+humantime-serde       = { version = "1.1" }
+lru                   = { version = "0.9" }
+natural-derive        = { version = "0.3" }
+parking_lot           = { version = "0.12" }
+serde                 = { version = "1.0", features = [ "derive" ] }
+serde_json            = { version = "1.0" }
+thiserror             = { version = "1.0" }
+tokio                 = { version = "1.24", features = [ "macros", "rt-multi-thread" ] }
+tokio-postgres        = { version = "0.7", features = [ "with-uuid-1" ] }
+tower                 = { version = "0.4" }
+tower-http            = { version = "0.3", features = [ "trace" ] }
+tracing               = { version = "0.1", default-features = false }
+tracing-subscriber    = { version = "0.3", default-features = false, features = [ "env-filter", "fmt", "json" ] }
+uuid                  = { version = "1.2", features = [ "serde", "v7" ] }
+
+[features]
+default  = [ "nats" ]
+nats     = [ "dep:eventsourced-nats" ]
+postgres = [ "dep:eventsourced-postgres" ]
