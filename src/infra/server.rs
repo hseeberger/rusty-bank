@@ -16,6 +16,7 @@ use axum::{
 
 use serde::Deserialize;
 use std::{
+    future::Future,
     iter,
     net::{IpAddr, SocketAddr},
 };
@@ -40,10 +41,16 @@ impl Config {
 }
 
 /// Run the server with the given [Config].
-pub async fn run<P, F>(config: Config, account_ids_projection: P, account_factory: F) -> Result<()>
+pub async fn run<P, F, S>(
+    config: Config,
+    account_ids_projection: P,
+    account_factory: F,
+    shutdown_signal: S,
+) -> Result<()>
 where
     P: AccountIdsProjection,
     F: AccountFactory,
+    S: Future<Output = ()> + Send + 'static,
 {
     let app_state = AppState {
         account_ids_projection,
@@ -65,11 +72,15 @@ where
             )),
         );
 
-    task::spawn(Server::bind(&config.socket_addr()).serve(app.into_make_service()))
-        .await
-        .map(|server_result| server_result.context("Server completed with error"))
-        .context("Server panicked")
-        .and_then(|r| r)
+    task::spawn(
+        Server::bind(&config.socket_addr())
+            .serve(app.into_make_service())
+            .with_graceful_shutdown(shutdown_signal),
+    )
+    .await
+    .map(|server_result| server_result.context("Server completed with error"))
+    .context("Server panicked")
+    .and_then(|r| r)
 }
 
 #[derive(Debug, Clone)]

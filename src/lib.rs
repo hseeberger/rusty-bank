@@ -23,8 +23,9 @@ use infra::{
     server,
 };
 use serde::Deserialize;
-use std::error::Error;
-use tracing::{debug, info};
+use std::{error::Error, future::Future};
+use tokio::{select, signal};
+use tracing::{debug, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 #[derive(Debug, Clone, Deserialize)]
@@ -91,10 +92,16 @@ pub async fn run() -> Result<()> {
     .await;
 
     // Create AccountIdsProjection.
-    let account_ids_projection = InMemAccountIdsProjection::new(evt_log).await;
+    let (account_ids_projection, account_ids_projection_terminated) =
+        InMemAccountIdsProjection::new(evt_log).await;
 
     // Run server.
-    let server = server::run(config.server, account_ids_projection, account_factory);
+    let server = server::run(
+        config.server,
+        account_ids_projection,
+        account_factory,
+        shutdown_signal(account_ids_projection_terminated),
+    );
     info!("Started");
     server.await?;
 
@@ -107,4 +114,20 @@ fn init_tracing() -> Result<()> {
         .with(tracing_subscriber::fmt::layer().json())
         .try_init()
         .context("Cannot initialize tracing")
+}
+
+async fn shutdown_signal<F>(account_ids_projection_terminated: F)
+where
+    F: Future<Output = ()>,
+{
+    let ctrl_c = async { signal::ctrl_c().await.expect("Failed to listen for ctrl-c") };
+
+    select! {
+        _ = account_ids_projection_terminated => {
+            warn!("Shutting down, because account IDs projection terminated");
+        }
+        _ = ctrl_c =>  {
+            warn!("Shutting down, because ctrl-c received");
+        }
+    }
 }

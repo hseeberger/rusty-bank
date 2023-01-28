@@ -1,11 +1,11 @@
 use super::AccountIdsProjection;
 use crate::domain::account;
 use eventsourced::{convert, EvtLog, SeqNo};
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use parking_lot::RwLock;
-use std::{collections::HashSet, sync::Arc};
-use tokio::{pin, task};
-use tracing::debug;
+use std::{collections::HashSet, future::Future, sync::Arc};
+use tokio::{pin, sync::oneshot, task};
+use tracing::{debug, error};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -14,11 +14,12 @@ pub struct InMemAccountIdsProjection {
 }
 
 impl InMemAccountIdsProjection {
-    pub async fn new<L>(evt_log: L) -> Self
+    pub async fn new<L>(evt_log: L) -> (Self, impl Future<Output = ()>)
     where
         L: EvtLog,
     {
         let account_ids = Arc::new(RwLock::new(HashSet::default()));
+        let (terminated_sdr, terminated_rcv) = oneshot::channel::<()>();
 
         // TODO: Proper error handling!
         let account_ids_clone = account_ids.clone();
@@ -36,11 +37,12 @@ impl InMemAccountIdsProjection {
                 debug!(%id, "Inserting ID");
                 account_ids_clone.write().insert(id);
             }
+
+            error!("Account IDs projection terminated");
+            let _ = terminated_sdr.send(());
         });
 
-        // TODO: Handle stream termination!
-
-        Self { account_ids }
+        (Self { account_ids }, terminated_rcv.map(|_| ()))
     }
 }
 
