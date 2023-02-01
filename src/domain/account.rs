@@ -11,8 +11,8 @@ pub const ACCOUNT_LIFECYCLE_TAG: &str = "account-lifecycle";
 /// An account. Defaults to a zero balance and no snapshot.
 #[derive(Debug, Default, Clone)]
 pub struct Account {
-    state: State,
     snapshot_after: Option<NonZeroU64>,
+    state: State,
     evt_count: u64,
 }
 
@@ -63,7 +63,7 @@ pub enum State {
 /// Command handler errors for an eventsourced [Account].
 #[derive(Debug, Clone, Error)]
 pub enum Error {
-    #[error("Balance of {balance} insufficient to withwraw amount of {withdraw_amount}")]
+    #[error("Balance '{balance}' insufficient to withwraw amount '{withdraw_amount}'")]
     InvalidWithdraw {
         balance: EuroCent,
         withdraw_amount: EuroCent,
@@ -94,7 +94,7 @@ impl EventSourced for Account {
                 Ok(Evt::Created(id).with_tag(ACCOUNT_LIFECYCLE_TAG))
             }
             (State::NonExistent, other) => {
-                error!("Cannot handle command {other:?} in state NonExistent");
+                error!("Cannot handle command '{other:?}' in state NonExistent");
                 Err(Error::NotYetCreated)
             }
 
@@ -118,7 +118,7 @@ impl EventSourced for Account {
             }
             .into_tagged_evt()),
             (State::Created { .. }, other) => {
-                error!("Cannot handle command {other:?} in state Created");
+                error!("Cannot handle command '{other:?}' in state Created");
                 Err(Error::AlreadyCreated)
             }
         }
@@ -134,7 +134,7 @@ impl EventSourced for Account {
                 balance: EuroCent::default(),
             }),
 
-            (State::NonExistent, _) => panic!("Illegal event {evt:?} in `NonExistent` state"),
+            (State::NonExistent, _) => panic!("Illegal event '{evt:?}' in state NonExistent"),
 
             // In State::Created:
             (
@@ -161,7 +161,7 @@ impl EventSourced for Account {
                 balance: balance - amount,
             }),
 
-            (State::Created { .. }, _) => panic!("Illegal event {evt:?} in `Created` state"),
+            (State::Created { .. }, _) => panic!("Illegal event '{evt:?}' in state Created"),
         }
 
         self.evt_count += 1;
@@ -186,36 +186,47 @@ mod tests {
     fn test_handle_cmd_and_evt() {
         let mut account = Account::default();
 
-        // Withdraw fails.
+        // Command Deposit fails in state NotCreated.
+        assert!(account
+            .handle_cmd(Cmd::Deposit(Uuid::now_v7(), 1u64.into()))
+            .is_err());
+
+        // Command Withdraw fails in state NotCreated.
         assert!(account
             .handle_cmd(Cmd::Withdraw(Uuid::now_v7(), 1u64.into()))
             .is_err());
 
-        // Deposited.
+        // Command Create succeeds in state NotCreated.
+        assert!(account.handle_cmd(Cmd::Create(Uuid::now_v7())).is_ok());
+
+        // Handle event Created.
+        account.handle_evt(Evt::Created(Uuid::now_v7()));
+
+        // Command Withdraw fails in state Created with insufficient balance.
+        assert!(account
+            .handle_cmd(Cmd::Withdraw(Uuid::now_v7(), 1u64.into()))
+            .is_err());
+
+        // Handle event Deposited.
         account.handle_evt(Evt::Deposited {
             id: Uuid::now_v7(),
             old_balance: 0u64.into(),
             amount: 1u64.into(),
         });
 
-        // Withdraw succeeds.
+        // Command Withdraw succeeds in state Created.
         assert!(account
             .handle_cmd(Cmd::Withdraw(Uuid::now_v7(), 1u64.into()))
             .is_ok());
 
-        // Deposit succeeds.
-        assert!(account
-            .handle_cmd(Cmd::Deposit(Uuid::now_v7(), 1u64.into()))
-            .is_ok());
-
-        // Withdrawn.
+        // Handle event Withdrawn.
         account.handle_evt(Evt::Withdrawn {
             id: Uuid::now_v7(),
             old_balance: 1u64.into(),
             amount: 1u64.into(),
         });
 
-        // Withdraw fails.
+        // Command Withdraw fails in state Created with insufficient balance.
         assert!(account
             .handle_cmd(Cmd::Withdraw(Uuid::now_v7(), 1u64.into()))
             .is_err());
