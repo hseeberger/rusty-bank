@@ -1507,7 +1507,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
- "bb8-postgres",
  "configured",
  "eventsourced",
  "eventsourced-nats",
@@ -1520,7 +1519,6 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "tokio-postgres",
  "tower",
  "tower-http",
  "tracing",

@@ -1,8 +1,5 @@
 use super::account::{AccountFactory, AccountIdsProjection};
-use crate::domain::{
-    account::{self},
-    euro_cent::EuroCent,
-};
+use crate::domain::{account, euro_cent::EuroCent};
 use anyhow::{Context, Result};
 use axum::{
     body::Body,
@@ -13,7 +10,6 @@ use axum::{
     routing::{get, post},
     Json, Router, Server, TypedHeader,
 };
-
 use serde::Deserialize;
 use std::{
     future::Future,
@@ -110,8 +106,17 @@ where
     F: AccountFactory,
 {
     let id = Uuid::now_v7();
-    match app_state.account_factory.get(id).await {
-        Ok(account) => match account.handle_cmd(account::Cmd::Create(id)).await {
+    match app_state
+        .account_factory
+        .get(id)
+        .await
+        .context("Cannot get Account entity")
+    {
+        Ok(account) => match account
+            .handle_cmd(account::Cmd::Create(id))
+            .await
+            .context("Cannot handle Create command")
+        {
             Ok(Ok(_)) => {
                 let location_value = HeaderValue::from_str(&format!("/accounts/{id}")).unwrap();
                 let mut location_value = iter::once(&location_value);
@@ -122,13 +127,13 @@ where
             Ok(Err(error)) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
 
             Err(error) => {
-                error!(%id, error = format!("{error:#}"), "Cannot handle Create command");
+                error!(%id, error = format!("{error:#}"), "Cannot create account");
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
         },
 
         Err(error) => {
-            error!(%id, error = format!("{error:#}"), "Cannot get Account entity");
+            error!(%id, error = format!("{error:#}"), "Cannot create account");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
@@ -144,12 +149,18 @@ where
     F: AccountFactory,
 {
     if app_state.account_ids_projection.contains(id).await {
-        match app_state.account_factory.get(id).await {
+        match app_state
+            .account_factory
+            .get(id)
+            .await
+            .context("Cannot get Account entity")
+        {
             Ok(account) => {
                 let deposit_id = Uuid::now_v7();
                 match account
                     .handle_cmd(account::Cmd::Deposit(deposit_id, amount))
                     .await
+                    .context("Cannot handle Deposit command")
                 {
                     Ok(Ok(_)) => {
                         let location_value =
@@ -163,14 +174,14 @@ where
                     Ok(Err(error)) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
 
                     Err(error) => {
-                        error!(%id, error = format!("{error:#}"), "Cannot handle Deposit command");
+                        error!(%id, error = format!("{error:#}"), "Cannot deposit");
                         StatusCode::INTERNAL_SERVER_ERROR.into_response()
                     }
                 }
             }
 
             Err(error) => {
-                error!(%id, error = format!("{error:#}"), "Cannot get Account entity");
+                error!(%id, error = format!("{error:#}"), "Cannot deposit");
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
         }
@@ -189,12 +200,18 @@ where
     F: AccountFactory,
 {
     if app_state.account_ids_projection.contains(id).await {
-        match app_state.account_factory.get(id).await {
+        match app_state
+            .account_factory
+            .get(id)
+            .await
+            .context("Cannot get Account entity")
+        {
             Ok(account) => {
                 let withdrawal_id = Uuid::now_v7();
                 match account
                     .handle_cmd(account::Cmd::Withdraw(withdrawal_id, amount))
                     .await
+                    .context("Cannot handle Withdraw command")
                 {
                     Ok(Ok(_)) => {
                         let location_value = HeaderValue::from_str(&format!(
@@ -209,14 +226,14 @@ where
                     Ok(Err(error)) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
 
                     Err(error) => {
-                        error!(%id, error = format!("{error:#}"), "Cannot handle Withdraw command");
+                        error!(%id, error = format!("{error:#}"), "Cannot withdraw");
                         StatusCode::INTERNAL_SERVER_ERROR.into_response()
                     }
                 }
             }
 
             Err(error) => {
-                error!(%id, error = format!("{error:#}"), "Cannot get Account entity");
+                error!(%id, error = format!("{error:#}"), "Cannot withdraw");
                 StatusCode::INTERNAL_SERVER_ERROR.into_response()
             }
         }

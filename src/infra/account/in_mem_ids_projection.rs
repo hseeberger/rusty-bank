@@ -1,5 +1,6 @@
 use super::AccountIdsProjection;
 use crate::domain::account;
+use anyhow::Context;
 use eventsourced::{convert, EvtLog, SeqNo};
 use futures::{FutureExt, StreamExt};
 use parking_lot::RwLock;
@@ -21,24 +22,32 @@ impl InMemAccountIdsProjection {
         let account_ids = Arc::new(RwLock::new(HashSet::default()));
         let (terminated_sdr, terminated_rcv) = oneshot::channel::<()>();
 
-        // TODO: Proper error handling!
         let account_ids_clone = account_ids.clone();
         task::spawn(async move {
-            let ids = evt_log
+            match evt_log
                 .evts_by_tag::<account::Evt, _, _, _>(
                     account::ACCOUNT_LIFECYCLE_TAG,
                     SeqNo::MIN,
                     convert::serde_json::from_bytes,
                 )
                 .await
-                .unwrap();
-            pin!(ids);
-            while let Some(Ok((_, account::Evt::Created(id)))) = ids.next().await {
-                debug!(%id, "Inserting ID");
-                account_ids_clone.write().insert(id);
+                .context("Cannot create events-by-tag query")
+            {
+                Ok(ids) => {
+                    pin!(ids);
+                    while let Some(Ok((_, account::Evt::Created(id)))) = ids.next().await {
+                        debug!(%id, "Inserting ID");
+                        account_ids_clone.write().insert(id);
+                    }
+                    error!("InMemAccountIdsProjection projection terminated");
+                }
+
+                Err(error) => error!(
+                    error = format!("{error:#}"),
+                    "Cannot create InMemAccountIdsProjection"
+                ),
             }
 
-            error!("Account IDs projection terminated");
             let _ = terminated_sdr.send(());
         });
 

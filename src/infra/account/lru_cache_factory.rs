@@ -32,13 +32,12 @@ impl LruCacheAccountFactory {
         let accounts: Arc<RwLock<LruCache<Uuid, EntityRef<Account>>>> =
             Arc::new(RwLock::new(LruCache::new(config.cache_capacity)));
 
-        // TODO Make channel buffer size configurable!
         let (get_account_sdr, mut get_account_rcv) = mpsc::channel::<(
             Uuid,
             oneshot::Sender<Result<EntityRef<Account>, Error>>,
         )>(config.cache_buffer.get());
         task::spawn(async move {
-            while let Some((id, account_srd)) = get_account_rcv.recv().await {
+            while let Some((id, account_sdr)) = get_account_rcv.recv().await {
                 let accounts = accounts.clone();
                 let evt_log = evt_log.clone();
                 let snapshot_store = snapshot_store.clone();
@@ -73,7 +72,7 @@ impl LruCacheAccountFactory {
                 .await
                 .map_err(Error::SpawnEntity);
 
-                if account_srd.send(account).is_err() {
+                if account_sdr.send(account).is_err() {
                     error!(%id, "Cannot send back spawn result");
                 }
             }
