@@ -17,24 +17,3 @@ setup       = true
 [snapshot-store]
 server-addr = "localhost:4222"
 setup       = true
-
-# # PostgreSQL event log
-# [evt-log]
-# host          = "localhost"
-# port          = 5432
-# user          = "test"
-# password      = "test"
-# dbname        = "test"
-# sslmode       = "prefer"
-# poll-interval = "3s"
-# setup         = true
-
-# # PostgreSQL snapshot store
-# [snapshot-store]
-# host     = "localhost"
-# port     = 5432
-# user     = "test"
-# password = "test"
-# dbname   = "test"
-# sslmode  = "prefer"
-# setup    = true
